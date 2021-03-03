@@ -112,3 +112,17 @@ ucli.key
 cscope.*
 tags
 *.bak
+
+# Setup
+piton/ariane_setup.sh
+piton/design/chip/tile/ariane
+piton/tools/src/sims/sims,2.0
+
+# Verilator
+diag.dump
+diag.ev
+diag.exe
+diag.o
+mem.image
+symbol.tbl
+trace_hart_00.dasm
