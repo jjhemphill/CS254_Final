@@ -112,3 +112,5 @@ ucli.key
 cscope.*
 tags
 *.bak
+
+piton/ariane_setup.sh
