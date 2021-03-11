@@ -52,7 +52,7 @@ module bht #(
     for (genvar i = 0; i < ariane_pkg::INSTR_PER_FETCH; i++) begin : gen_bht_output
         assign bht_prediction_o[i].valid = bht_q[index][i].valid;
         // ETHAN/JUSTIN ALWAYS TAKEN
-        assign bht_prediction_o[i].taken = 0;
+        assign bht_prediction_o[i].taken = 1;
     end
 
     always_comb begin : update_bht
