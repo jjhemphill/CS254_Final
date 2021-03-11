@@ -129,7 +129,7 @@ package ariane_pkg;
     localparam TRANS_ID_BITS = $clog2(NR_SB_ENTRIES); // depending on the number of scoreboard entries we need that many bits
                                                       // to uniquely identify the entry in the scoreboard
     localparam ASID_WIDTH    = 1;
-    localparam BITS_SATURATION_COUNTER = 0;
+    localparam BITS_SATURATION_COUNTER = 2;
     localparam NR_COMMIT_PORTS = 2;
 
     localparam ENABLE_RENAME = 1'b0;
