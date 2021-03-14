@@ -37,47 +37,51 @@ module bht #(
     // we are not interested in all bits of the address
     unread i_unread (.d_i(|vpc_i));
 
+
+
+
+
     struct packed {
-        logic       valid;
-        logic [1:0] saturation_counter;
+        logic                   valid;
+        logic [riscv::VLEN-1:0] pc;
     } bht_d[NR_ROWS-1:0][ariane_pkg::INSTR_PER_FETCH-1:0], bht_q[NR_ROWS-1:0][ariane_pkg::INSTR_PER_FETCH-1:0];
 
     logic [$clog2(NR_ROWS)-1:0]  index, update_pc;
     logic [ROW_ADDR_BITS-1:0]    update_row_index;
-    logic [1:0]                  saturation_counter;
 
     assign index     = vpc_i[PREDICTION_BITS - 1:ROW_ADDR_BITS + OFFSET];
     assign update_pc = bht_update_i.pc[PREDICTION_BITS - 1:ROW_ADDR_BITS + OFFSET];
     assign update_row_index = bht_update_i.pc[ROW_ADDR_BITS + OFFSET - 1:OFFSET];
 
+    logic [riscv::VLEN-1:0][ariane_pkg::INSTR_PER_FETCH-1:0] instruction_pc;
+    for (genvar i = 0; i < ariane_pkg::INSTR_PER_FETCH; i++) begin : assign_instruction_pcs
+        assign instruction_pc[i] = vpc_i + (i<<OFFSET);
+    end
+
+
     // prediction assignment
     for (genvar i = 0; i < ariane_pkg::INSTR_PER_FETCH; i++) begin : gen_bht_output
         assign bht_prediction_o[i].valid = bht_q[index][i].valid;
-        assign bht_prediction_o[i].taken = bht_q[index][i].saturation_counter[1] == 1'b1;
+        // don't take if valid and pc exists in table
+        assign bht_prediction_o[i].taken = ~( (bht_prediction_o[i].valid) && (instruction_pc[i] == bht_q[index][i].pc) );
     end
 
     always_comb begin : update_bht
         bht_d = bht_q;
-        saturation_counter = bht_q[update_pc][update_row_index].saturation_counter;
 
+        // if taken, if in table, set valid bit to 0
+        // if not taken, if not in table, add to table
         if (bht_update_i.valid && !debug_mode_i) begin
-            bht_d[update_pc][update_row_index].valid = 1'b1;
-
-            if (saturation_counter == 2'b11) begin
-                // we can safely decrease it
-                if (!bht_update_i.taken)
-                    bht_d[update_pc][update_row_index].saturation_counter = saturation_counter - 1;
-            // then check if it saturated in the negative regime e.g.: branch not taken
-            end else if (saturation_counter == 2'b00) begin
-                // we can safely increase it
-                if (bht_update_i.taken)
-                    bht_d[update_pc][update_row_index].saturation_counter = saturation_counter + 1;
-            end else begin // otherwise we are not in any boundaries and can decrease or increase it
-                if (bht_update_i.taken)
-                    bht_d[update_pc][update_row_index].saturation_counter = saturation_counter + 1;
-                else
-                    bht_d[update_pc][update_row_index].saturation_counter = saturation_counter - 1;
+            if (!bht_update_i.taken) begin
+                // if conflict, just overwrite with most recent
+                bht_d[update_pc][update_row_index].pc = bht_update_i.pc;
+                bht_d[update_pc][update_row_index].valid = 1'b1;
+            end else if (bht_update_i.taken) begin
+                // make invalid
+                if (bht_d[update_pc][update_row_index].pc == bht_update_i.pc)
+                    bht_d[update_pc][update_row_index].valid = 1'b0;
             end
+
         end
     end
 
@@ -93,8 +97,7 @@ module bht #(
             if (flush_i) begin
                 for (int i = 0; i < NR_ROWS; i++) begin
                     for (int j = 0; j < ariane_pkg::INSTR_PER_FETCH; j++) begin
-                        bht_q[i][j].valid <=  1'b0;
-                        bht_q[i][j].saturation_counter <= 2'b10;
+                        bht_q[i][j] <= '0;
                     end
                 end
             end else begin
