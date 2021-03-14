@@ -63,7 +63,7 @@ module bht #(
     for (genvar i = 0; i < ariane_pkg::INSTR_PER_FETCH; i++) begin : gen_bht_output
         assign bht_prediction_o[i].valid = bht_q[index][i].valid;
         // don't take if valid and pc exists in table
-        assign bht_prediction_o[i].taken = ~( (bht_prediction_o[i].valid) && (instruction_pc[i] == bht_q[index][i].pc) );
+        assign bht_prediction_o[i].taken = ( (bht_prediction_o[i].valid) && (instruction_pc[i] == bht_q[index][i].pc) );
     end
 
     always_comb begin : update_bht
@@ -72,11 +72,11 @@ module bht #(
         // if taken, if in table, set valid bit to 0
         // if not taken, if not in table, add to table
         if (bht_update_i.valid && !debug_mode_i) begin
-            if (!bht_update_i.taken) begin
+            if (bht_update_i.taken) begin
                 // if conflict, just overwrite with most recent
                 bht_d[update_pc][update_row_index].pc = bht_update_i.pc;
                 bht_d[update_pc][update_row_index].valid = 1'b1;
-            end else if (bht_update_i.taken) begin
+            end else if (!bht_update_i.taken) begin
                 // make invalid
                 if (bht_d[update_pc][update_row_index].pc == bht_update_i.pc)
                     bht_d[update_pc][update_row_index].valid = 1'b0;
