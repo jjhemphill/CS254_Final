@@ -380,6 +380,7 @@ module frontend #(
       .debug_mode_i,
       .vpc_i            ( icache_vaddr_q   ),
       .bht_update_i     ( bht_update       ),
+      .btb_prediction_i ( btb_prediction   ),
       .bht_prediction_o ( bht_prediction   )
     );
 
