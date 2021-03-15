@@ -14,6 +14,11 @@
 // Date: 09.06.2018
 
 // branch history table - 2 bit saturation counter
+
+`define COUNTER_BITS 4
+`define COUNTER_MAX 'b0111
+`define COUNTER_MIN 'b1000
+
 module bht #(
     parameter int unsigned NR_ENTRIES = 1024
 )(
@@ -39,12 +44,11 @@ module bht #(
 
     struct packed {
         logic       valid;
-        logic [1:0] saturation_counter;
+        logic signed [`COUNTER_BITS-1:0] signed_counter;
     } bht_d[NR_ROWS-1:0][ariane_pkg::INSTR_PER_FETCH-1:0], bht_q[NR_ROWS-1:0][ariane_pkg::INSTR_PER_FETCH-1:0];
 
     logic [$clog2(NR_ROWS)-1:0]  index, update_pc;
     logic [ROW_ADDR_BITS-1:0]    update_row_index;
-    logic [1:0]                  saturation_counter;
 
     assign index     = vpc_i[PREDICTION_BITS - 1:ROW_ADDR_BITS + OFFSET];
     assign update_pc = bht_update_i.pc[PREDICTION_BITS - 1:ROW_ADDR_BITS + OFFSET];
@@ -53,31 +57,20 @@ module bht #(
     // prediction assignment
     for (genvar i = 0; i < ariane_pkg::INSTR_PER_FETCH; i++) begin : gen_bht_output
         assign bht_prediction_o[i].valid = bht_q[index][i].valid;
-        assign bht_prediction_o[i].taken = bht_q[index][i].saturation_counter[1] == 1'b1;
+        assign bht_prediction_o[i].taken = bht_q[index][i].signed_counter[`COUNTER_BITS-1] == 1'b0;
     end
 
     always_comb begin : update_bht
         bht_d = bht_q;
-        saturation_counter = bht_q[update_pc][update_row_index].saturation_counter;
 
         if (bht_update_i.valid && !debug_mode_i) begin
             bht_d[update_pc][update_row_index].valid = 1'b1;
 
-            if (saturation_counter == 2'b11) begin
-                // we can safely decrease it
-                if (!bht_update_i.taken)
-                    bht_d[update_pc][update_row_index].saturation_counter = saturation_counter - 1;
-            // then check if it saturated in the negative regime e.g.: branch not taken
-            end else if (saturation_counter == 2'b00) begin
-                // we can safely increase it
-                if (bht_update_i.taken)
-                    bht_d[update_pc][update_row_index].saturation_counter = saturation_counter + 1;
-            end else begin // otherwise we are not in any boundaries and can decrease or increase it
-                if (bht_update_i.taken)
-                    bht_d[update_pc][update_row_index].saturation_counter = saturation_counter + 1;
-                else
-                    bht_d[update_pc][update_row_index].saturation_counter = saturation_counter - 1;
-            end
+            if (bht_update_i.taken && (bht_d[update_pc][update_row_index].signed_counter != `COUNTER_MAX))
+                bht_d[update_pc][update_row_index].signed_counter = bht_d[update_pc][update_row_index].signed_counter + 1;
+            else if (!bht_update_i.taken && (bht_d[update_pc][update_row_index].signed_counter != `COUNTER_MIN))
+                bht_d[update_pc][update_row_index].signed_counter = bht_d[update_pc][update_row_index].signed_counter - 1;
+
         end
     end
 
@@ -93,8 +86,7 @@ module bht #(
             if (flush_i) begin
                 for (int i = 0; i < NR_ROWS; i++) begin
                     for (int j = 0; j < ariane_pkg::INSTR_PER_FETCH; j++) begin
-                        bht_q[i][j].valid <=  1'b0;
-                        bht_q[i][j].saturation_counter <= 2'b10;
+                        bht_q[i][j] <= '0;
                     end
                 end
             end else begin
