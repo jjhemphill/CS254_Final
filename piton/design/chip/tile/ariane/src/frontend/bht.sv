@@ -60,7 +60,7 @@ module bht #(
         // // Predict forward branches
         // assign bht_prediction_o[i].taken = ( btb_prediction_i[i].target_address > instruction_pc[i] );
         // Predict backwards branches
-        assign bht_prediction_o[i].taken = ( btb_prediction_i[i].target_address > instruction_pc[i] );
+        assign bht_prediction_o[i].taken = ( btb_prediction_i[i].target_address < instruction_pc[i] );
     end
 
     always_comb begin : update_bht
